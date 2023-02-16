@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../")
 from sklearn.cluster import KMeans
-from sklearn.externals import joblib
+import joblib
 import os
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
