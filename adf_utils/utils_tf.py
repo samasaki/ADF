@@ -1,7 +1,6 @@
 from distutils.version import LooseVersion
 import numpy as np
 import os
-from six.moves import xrange
 import tensorflow as tf
 import time
 import warnings
@@ -121,7 +120,7 @@ def model_train(sess, x, y, predictions, X_train, Y_train, save=False,
                           "guardai_util may drop support for this version.")
             sess.run(tf.initialize_all_variables())
 
-        for epoch in xrange(args.nb_epochs):
+        for epoch in range(args.nb_epochs):
             # Compute number of batches
             nb_batches = int(math.ceil(float(len(X_train)) / args.batch_size))
             assert nb_batches * args.batch_size >= len(X_train)

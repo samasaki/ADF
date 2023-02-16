@@ -4,10 +4,7 @@ import tensorflow as tf
 from tensorflow.python.platform import flags
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
-if sys.version_info.major==2:
-    from Queue import PriorityQueue
-else:
-    from queue import PriorityQueue
+from queue import PriorityQueue
 from z3 import *
 import os
 import copy

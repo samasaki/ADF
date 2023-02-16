@@ -200,7 +200,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
             local_disc_inputs.add(tuple(temp))
             local_disc_inputs_list.append(temp)
 
-        return not result
+        return int(not result)
 
     # select the seed input for fairness testing
     inputs = seed_test_input(clusters, min(max_global, len(X)))

@@ -219,7 +219,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
             tuple(temp) not in local_disc_inputs):
             local_disc_inputs.add(tuple(temp))
             local_disc_inputs_list.append(temp)
-        return result == int(inp[sensitive_param - 1])
+        return int(result == int(inp[sensitive_param - 1]))
 
     global_discovery = Global_Discovery(data_config[dataset])
     local_perturbation = Local_Perturbation(sess, preds, x, data_config[dataset], sensitive_param, param_probability,
