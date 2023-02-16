@@ -2,7 +2,8 @@ import numpy as np
 import sys
 sys.path.append("../")
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.bank import bank_data

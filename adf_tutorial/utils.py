@@ -3,7 +3,8 @@ sys.path.append("../")
 from sklearn.cluster import KMeans
 from sklearn.externals import joblib
 import os
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from tensorflow.python.platform import flags
 
 from adf_data.census import census_data

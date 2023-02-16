@@ -58,7 +58,8 @@ class Model(object):
             pass
         except NotImplementedError:
             pass
-        import tensorflow as tf
+        import tensorflow.compat.v1 as tf
+        tf.disable_v2_behavior()
         return tf.nn.softmax(self.get_logits(x))
 
     def get_layer_names(self):
