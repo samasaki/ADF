@@ -2,16 +2,24 @@ import numpy as np
 import sys
 sys.path.append("../")
 
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.bank import bank_data
 from adf_data.credit import credit_data
-from adf_utils.utils_tf import model_train, model_eval
 from adf_model.tutorial_models import dnn
 
 FLAGS = flags.FLAGS
+
+def gpu_initialize():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
+
 
 def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
     """
@@ -20,44 +28,24 @@ def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
     :param model_path: the path to save trained model
     """
     data = {"census": census_data, "credit": credit_data, "bank": bank_data}
-
-    # prepare the data and model
     X, Y, input_shape, nb_classes = data[dataset]()
-    tf.set_random_seed(1234)
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.8
-    sess = tf.Session(config=config)
-    x = tf.placeholder(tf.float32, shape=input_shape)
-    y = tf.placeholder(tf.float32, shape=(None, nb_classes))
-    model = dnn(input_shape, nb_classes)
-    preds = model(x)
 
-    # training parameters
-    train_params = {
-        'nb_epochs': nb_epochs,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate,
-        'train_dir': model_path + dataset + "/",
-        'filename': 'test.model'
-    }
-
-    # training procedure
-    sess.run(tf.global_variables_initializer())
-    rng = np.random.RandomState([2019, 7, 15])
-    model_train(sess, x, y, preds, X, Y, args=train_params,
-                rng=rng, save=True)
-
-    # evaluate the accuracy of trained model
-    eval_params = {'batch_size': 128}
-    accuracy = model_eval(sess, x, y, preds, X, Y, args=eval_params)
+    model = dnn(input_shape, nb_classes, learning_rate)
+    history = model.fit(X, Y, batch_size=batch_size, epochs=nb_epochs, shuffle=True)
+    model.save(model_path + dataset + '/' + 'test.model.h5')
+    
+    accuracy = np.mean(history.history['categorical_accuracy'])
     print('Test accuracy on legitimate test examples: {0}'.format(accuracy))
 
+
 def main(argv=None):
+    gpu_initialize()
     training(dataset = FLAGS.dataset,
              model_path = FLAGS.model_path,
              nb_epochs=FLAGS.nb_epochs,
              batch_size=FLAGS.batch_size,
              learning_rate=FLAGS.learning_rate)
+
 
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
@@ -66,4 +54,4 @@ if __name__ == '__main__':
     flags.DEFINE_integer('batch_size', 128, 'Size of training batches')
     flags.DEFINE_float('learning_rate', 0.01, 'Learning rate for training')
 
-    tf.app.run()
+    main()

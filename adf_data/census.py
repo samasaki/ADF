@@ -28,7 +28,7 @@ def census_data():
     X = np.array(X, dtype=float)
     Y = np.array(Y, dtype=float)
 
-    input_shape = (None, 13)
+    input_shape = (13,)
     nb_classes = 2
 
     return X, Y, input_shape, nb_classes

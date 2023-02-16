@@ -28,7 +28,7 @@ def credit_data():
     X = np.array(X, dtype=float)
     Y = np.array(Y, dtype=float)
 
-    input_shape = (None, 20)
+    input_shape = (20,)
     nb_classes = 2
 
     return X, Y, input_shape, nb_classes
