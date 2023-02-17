@@ -1,6 +1,8 @@
 import numpy as np
 import sys
 sys.path.append("../")
+import os
+os.environ['TF_DETERMINISTIC_OPS'] = '1' # need to install tensorflow-determinism
 
 import tensorflow as tf
 from tensorflow.python.platform import flags
@@ -8,6 +10,7 @@ from adf_data.census import census_data
 from adf_data.bank import bank_data
 from adf_data.credit import credit_data
 from adf_model.tutorial_models import dnn
+from adf_utils.utils import set_seed
 
 FLAGS = flags.FLAGS
 
@@ -40,6 +43,7 @@ def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
 
 def main(argv=None):
     gpu_initialize()
+    set_seed()
     training(dataset = FLAGS.dataset,
              model_path = FLAGS.model_path,
              nb_epochs=FLAGS.nb_epochs,

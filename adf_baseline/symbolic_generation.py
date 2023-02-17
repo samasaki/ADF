@@ -14,7 +14,7 @@ from adf_baseline.lime import lime_tabular
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.utils import gpu_initialize, load_model, cluster
+from adf_utils.utils import gpu_initialize, load_model, set_seed, cluster
 
 FLAGS = flags.FLAGS
 
@@ -317,6 +317,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
 
 def main(argv=None):
     gpu_initialize()
+    set_seed()
     symbolic_generation(dataset=FLAGS.dataset,
                         sensitive_param=FLAGS.sens_param,
                         model_path=FLAGS.model_path,

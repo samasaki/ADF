@@ -13,7 +13,7 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
-from adf_utils.utils import gpu_initialize, load_model
+from adf_utils.utils import gpu_initialize, load_model, set_seed
 
 FLAGS = flags.FLAGS
 
@@ -258,6 +258,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
 
 def main(argv=None):
     gpu_initialize()
+    set_seed()
     aequitas(dataset = FLAGS.dataset,
              sensitive_param = FLAGS.sens_param,
              model_path = FLAGS.model_path,
