@@ -13,7 +13,7 @@ from adf_baseline.lime import lime_tabular
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.utils import gpu_initialize, load_model, set_seed, cluster
+from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster
 
 def seed_test_input(dataset, cluster_num, limit):
     """
@@ -24,7 +24,7 @@ def seed_test_input(dataset, cluster_num, limit):
     :return: a sequence of seed inputs
     """
     # build the clustering model
-    clf = cluster(dataset, cluster_num)
+    clf = load_cluster(dataset, cluster_num)
     clusters = [np.where(clf.labels_ == i) for i in range(cluster_num)]  # len(clusters[0][0])==32561
 
     i = 0

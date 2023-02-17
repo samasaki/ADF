@@ -11,7 +11,7 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
-from adf_utils.utils import gpu_initialize, load_model, set_seed, cluster
+from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster
 
 def gradients(model, x, y=None):
     """
@@ -177,7 +177,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     model = load_model(model_path)
 
     # build the clustering model
-    clf = cluster(dataset, cluster_num)
+    clf = load_cluster(dataset, cluster_num)
     clusters = [np.where(clf.labels_==i) for i in range(cluster_num)]
 
     # store the result of fairness testing
