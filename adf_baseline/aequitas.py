@@ -5,8 +5,7 @@ import os
 import numpy as np
 import random
 from scipy.optimize import basinhopping
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from tensorflow.python.platform import flags
 import copy
 
@@ -14,8 +13,6 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
-from adf_model.tutorial_models import dnn
-from adf_utils.utils_tf import model_argmax
 
 FLAGS = flags.FLAGS
 
@@ -24,13 +21,11 @@ class Local_Perturbation(object):
     The  implementation of local perturbation
     """
 
-    def __init__(self, sess, preds, x, conf, sensitive_param, param_probability, param_probability_change_size,
+    def __init__(self, model, conf, sensitive_param, param_probability, param_probability_change_size,
                  direction_probability, direction_probability_change_size, step_size):
         """
         Initial function of local perturbation
-        :param sess: TF session
-        :param preds: the model's symbolic output
-        :param x: input placeholder
+        :param model: TF model
         :param conf: the configuration of dataset
         :param sensitive_param: the index of sensitive feature
         :param param_probability: the probabilities of features
@@ -39,9 +34,7 @@ class Local_Perturbation(object):
         :param direction_probability_change_size:
         :param step_size: the step size of perturbation
         """
-        self.sess = sess
-        self.preds = preds
-        self.x = x
+        self.model = model
         self.conf = conf
         self.sensitive_param = sensitive_param
         self.param_probability = param_probability
@@ -74,7 +67,7 @@ class Local_Perturbation(object):
         x[param_choice] = min(self.conf.input_bounds[param_choice][1], x[param_choice])
 
         # check whether the test case is an individual discriminatory instance
-        ei = check_for_error_condition(self.conf, self.sess, self.x, self.preds, x, self.sensitive_param)
+        ei = check_for_error_condition(self.conf, self.model, x, self.sensitive_param)
 
         # update the probabilities of directions
         if (ei != int(x[self.sensitive_param - 1]) and direction_choice == -1) or (not (ei != int(x[self.sensitive_param - 1])) and direction_choice == 1):
@@ -129,26 +122,25 @@ class Global_Discovery(object):
             x[i] = random.randint(self.conf.input_bounds[i][0], self.conf.input_bounds[i][1])
         return x
 
-def check_for_error_condition(conf, sess, x, preds, t, sens):
+def check_for_error_condition(conf, model, t, sens):
     """
     Check whether the test case is an individual discriminatory instance
     :param conf: the configuration of dataset
-    :param sess: TF session
-    :param x: input placeholder
-    :param preds: the model's symbolic output
+    :param model: TF model
     :param t: test case
     :param sens: the index of sensitive feature
     :return: the value of sensitive feature
     """
+
     t = np.array(t).astype("int")
-    label = model_argmax(sess, x, preds, np.array([t]))
+    label = np.argmax(model(np.array([t])))
 
     # check for all the possible values of sensitive feature
     for val in range(conf.input_bounds[sens-1][0], conf.input_bounds[sens-1][1]+1):
         if val != int(t[sens-1]):
             tnew = copy.deepcopy(t)
             tnew[sens-1] = val
-            label_new = model_argmax(sess, x, preds, np.array([tnew]))
+            label_new = np.argmax(model(np.array([tnew])))
             if label_new != label:
                 return val
     return t[sens - 1]
@@ -179,16 +171,9 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
 
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
-    model = dnn(input_shape, nb_classes)
-    x = tf.placeholder(tf.float32, shape=input_shape)
-    y = tf.placeholder(tf.float32, shape=(None, nb_classes))
-    preds = model(x)
-    tf.set_random_seed(1234)
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.8
-    sess = tf.Session(config=config)
-    saver = tf.train.Saver()
-    saver.restore(sess, model_path)
+
+    model_path = model_path + dataset + "/test.model.h5"
+    model = load_model(model_path)
 
     # store the result of fairness testing
     global_disc_inputs = set()
@@ -212,7 +197,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         :param inp: test input
         :return: whether it is an individual discriminatory instance
         """
-        result = check_for_error_condition(data_config[dataset], sess, x, preds, inp, sensitive_param)
+        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
         temp = copy.deepcopy(inp.astype('int').tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
@@ -223,7 +208,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         return int(result == int(inp[sensitive_param - 1]))
 
     global_discovery = Global_Discovery(data_config[dataset])
-    local_perturbation = Local_Perturbation(sess, preds, x, data_config[dataset], sensitive_param, param_probability,
+    local_perturbation = Local_Perturbation(model, data_config[dataset], sensitive_param, param_probability,
                                             param_probability_change_size, direction_probability,
                                             direction_probability_change_size, step_size)
 
@@ -236,7 +221,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
 
-        result = check_for_error_condition(data_config[dataset], sess, x, preds, inp, sensitive_param)
+        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
 
         # if get an individual discriminatory instance
         if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (
@@ -270,7 +255,20 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)))
 
+def gpu_initialize():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
+
+def load_model(model_path):
+    return tf.keras.models.load_model(model_path)
+
 def main(argv=None):
+    gpu_initialize()
     aequitas(dataset = FLAGS.dataset,
              sensitive_param = FLAGS.sens_param,
              model_path = FLAGS.model_path,
@@ -281,10 +279,10 @@ def main(argv=None):
 if __name__ == '__main__':
     flags.DEFINE_string("dataset", "census", "the name of dataset")
     flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
-    flags.DEFINE_string('model_path', '../models/census/test.model', 'the path for testing model')
+    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
     flags.DEFINE_integer('max_global', 1000, 'number of maximum samples for global search')
     flags.DEFINE_integer('max_local', 1000, 'number of maximum samples for local search')
     flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
 
-    tf.app.run()
+    main()
 
