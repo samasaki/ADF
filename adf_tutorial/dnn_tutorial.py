@@ -1,6 +1,5 @@
 import numpy as np
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 import sys, os
 sys.path.append("../")
 import copy
@@ -11,36 +10,32 @@ from scipy.optimize import basinhopping
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_model.tutorial_models import dnn
-from adf_utils.utils_tf import model_prediction, model_argmax
 from adf_utils.config import census, credit, bank
-from adf_tutorial.utils import cluster, gradient_graph
+from adf_tutorial.utils import cluster, gradients
 
 FLAGS = flags.FLAGS
 
 # step size of perturbation
 perturbation_size = 1
 
-def check_for_error_condition(conf, sess, x, preds, t, sens):
+def check_for_error_condition(conf, model, t, sens):
     """
     Check whether the test case is an individual discriminatory instance
     :param conf: the configuration of dataset
-    :param sess: TF session
-    :param x: input placeholder
-    :param preds: the model's symbolic output
+    :param model: TF model
     :param t: test case
     :param sens: the index of sensitive feature
-    :return: whether it is an individual discriminatory instance
+    :return: the value of sensitive feature
     """
     t = t.astype('int')
-    label = model_argmax(sess, x, preds, np.array([t]))
+    label = np.argmax(model.predict(np.array([t]), verbose=0))
 
     # check for all the possible values of sensitive feature
     for val in range(conf.input_bounds[sens-1][0], conf.input_bounds[sens-1][1]+1):
         if val != t[sens-1]:
             tnew = copy.deepcopy(t)
             tnew[sens-1] = val
-            label_new = model_argmax(sess, x, preds, np.array([tnew]))
+            label_new = np.argmax(model.predict(np.array([tnew]), verbose=0))
             if label_new != label:
                 return True
     return False
@@ -85,20 +80,16 @@ class Local_Perturbation(object):
     The  implementation of local perturbation
     """
 
-    def __init__(self, sess, grad, x, n_value, sens, input_shape, conf):
+    def __init__(self, model, n_value, sens, input_shape, conf):
         """
         Initial function of local perturbation
-        :param sess: TF session
-        :param grad: the gradient graph
-        :param x: input placeholder
+        :param model: TF model
         :param n_value: the discriminatory value of sensitive feature
         :param sens_param: the index of sensitive feature
         :param input_shape: the shape of dataset
         :param conf: the configuration of dataset
         """
-        self.sess = sess
-        self.grad = grad
-        self.x = x
+        self.model = model
         self.n_value = n_value
         self.input_shape = input_shape
         self.sens = sens
@@ -118,8 +109,8 @@ class Local_Perturbation(object):
         n_x[self.sens - 1] = self.n_value
 
         # compute the gradients of an individual discriminatory instance pairs
-        ind_grad = self.sess.run(self.grad, feed_dict={self.x:np.array([x])})
-        n_ind_grad = self.sess.run(self.grad, feed_dict={self.x:np.array([n_x])})
+        grads = gradients(self.model, np.array([x, n_x]))
+        ind_grad, n_ind_grad = grads[:1], grads[1:]
 
         if np.zeros(self.input_shape).tolist() == ind_grad[0].tolist() and np.zeros(self.input_shape).tolist() == \
                 n_ind_grad[0].tolist():
@@ -158,20 +149,9 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
 
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
-    tf.set_random_seed(1234)
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.8
-    sess = tf.Session(config=config)
-    x = tf.placeholder(tf.float32, shape=input_shape)
-    y = tf.placeholder(tf.float32, shape=(None, nb_classes))
-    model = dnn(input_shape, nb_classes)
-    preds = model(x)
-    saver = tf.train.Saver()
-    model_path = model_path + dataset + "/test.model"
-    saver.restore(sess, model_path)
 
-    # construct the gradient graph
-    grad_0 = gradient_graph(x, preds)
+    model_path = model_path + dataset + "/test.model.h5"
+    model = load_model(model_path)
 
     # build the clustering model
     clf = cluster(dataset, cluster_num)
@@ -192,7 +172,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
         :param inp: test input
         :return: whether it is an individual discriminatory instance
         """
-        result = check_for_error_condition(data_config[dataset], sess, x, preds, inp, sensitive_param)
+        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
 
         temp = copy.deepcopy(inp.astype('int').tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
@@ -212,7 +192,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
 
         # start global perturbation
         for iter in range(max_iter+1):
-            probs = model_prediction(sess, x, preds, sample)[0]
+            probs = model(sample)[0]
             label = np.argmax(probs)
             prob = probs[label]
             max_diff = 0
@@ -223,7 +203,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
                 if i != sample[0][sensitive_param-1]:
                     n_sample = sample.copy()
                     n_sample[0][sensitive_param-1] = i
-                    n_probs = model_prediction(sess, x, preds, n_sample)[0]
+                    n_probs = model(n_sample)[0]
                     n_label = np.argmax(n_probs)
                     n_prob = n_probs[n_label]
                     if label != n_label:
@@ -248,7 +228,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
 
                 # start local perturbation
                 minimizer = {"method": "L-BFGS-B"}
-                local_perturbation = Local_Perturbation(sess, grad_0, x, n_value, sensitive_param, input_shape[1],
+                local_perturbation = Local_Perturbation(model, n_value, sensitive_param, input_shape[0],
                                                         data_config[dataset])
                 basinhopping(evaluate_local, sample, stepsize=1.0, take_step=local_perturbation,
                              minimizer_kwargs=minimizer,
@@ -265,8 +245,8 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
                 break
 
             # global perturbation
-            s_grad = sess.run(tf.sign(grad_0), feed_dict={x: sample})
-            n_grad = sess.run(tf.sign(grad_0), feed_dict={x: n_sample})
+            grads = gradients(model, np.vstack((sample, n_sample)))
+            s_grad, n_grad = np.sign(grads[:1]), np.sign(grads[1:])
 
             # find the feature with same impact
             if np.zeros(data_config[dataset].params).tolist() == s_grad[0].tolist():
@@ -276,7 +256,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
             else:
                 g_diff = np.array(s_grad[0] == n_grad[0], dtype=float)
             g_diff[sensitive_param - 1] = 0
-            if np.zeros(input_shape[1]).tolist() == g_diff.tolist():
+            if np.zeros(input_shape[0]).tolist() == g_diff.tolist():
                 index = np.random.randint(len(g_diff) - 1)
                 if index > sensitive_param - 2:
                     index = index + 1
@@ -304,7 +284,20 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)))
 
+def gpu_initialize():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
+
+def load_model(model_path):
+    return tf.keras.models.load_model(model_path)
+
 def main(argv=None):
+    gpu_initialize()
     dnn_fair_testing(dataset = FLAGS.dataset,
                      sensitive_param = FLAGS.sens_param,
                      model_path = FLAGS.model_path,
@@ -322,4 +315,4 @@ if __name__ == '__main__':
     flags.DEFINE_integer('max_local', 1000, 'maximum number of samples for local search')
     flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
 
-    tf.app.run()
+    main()

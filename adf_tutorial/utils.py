@@ -3,14 +3,12 @@ sys.path.append("../")
 from sklearn.cluster import KMeans
 import joblib
 import os
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from tensorflow.python.platform import flags
 
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.utils_tf import model_loss
 
 FLAGS = flags.FLAGS
 
@@ -32,27 +30,30 @@ def cluster(dataset, cluster_num=4):
         joblib.dump(clf , '../clusters/' + dataset + '.pkl')
     return clf
 
-def gradient_graph(x, preds, y=None):
+def gradients(model, x, y=None):
     """
-    Construct the TF graph of gradient
-    :param x: the input placeholder
-    :param preds: the model's symbolic output
-    :return: the gradient graph
+    Calculate gradients of the TF graph
+    :param model: the TF model
+    :param x: inputs
+    :param y: labels
+    :return: the gradients
     """
-    if y == None:
-        # Using model predictions as ground truth to avoid label leaking
-        preds_max = tf.reduce_max(preds, 1, keep_dims=True)
-        y = tf.to_float(tf.equal(preds, preds_max))
-        y = tf.stop_gradient(y)
-    y = y / tf.reduce_sum(y, 1, keep_dims=True)
+    tf_x = tf.Variable(x)
+    with tf.GradientTape() as g:
+        preds = model(tf_x)
 
-    # Compute loss
-    loss = model_loss(y, preds, mean=False)
+        if y is None:
+            # Using model predictions as ground truth to avoid label leaking
+            preds_max = tf.reduce_max(preds, axis=1)
+            labels = tf.cast(tf.equal(preds, preds_max), dtype=tf.float32)
+        else:
+            labels = tf.constant(y)
 
-    # Define gradient of loss wrt input
-    grad, = tf.gradients(loss, x)
+        loss = tf.losses.categorical_crossentropy(labels, preds)
+    
+    grads = g.gradient(loss, tf_x).numpy()
 
-    return grad
+    return grads
 
 def main(argv=None):
     cluster(dataset=FLAGS.dataset,
@@ -62,4 +63,4 @@ if __name__ == '__main__':
     flags.DEFINE_string('dataset', 'census', 'name of datasets')
     flags.DEFINE_integer('clusters', 4, 'number of clusters')
 
-    tf.app.run()
+    main()
