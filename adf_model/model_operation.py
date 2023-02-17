@@ -10,19 +10,9 @@ from adf_data.census import census_data
 from adf_data.bank import bank_data
 from adf_data.credit import credit_data
 from adf_model.tutorial_models import dnn
-from adf_utils.utils import set_seed
+from adf_utils.utils import gpu_initialize, set_seed
 
 FLAGS = flags.FLAGS
-
-def gpu_initialize():
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        except RuntimeError as e:
-            print(e)
-
 
 def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
     """
