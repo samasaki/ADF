@@ -25,7 +25,7 @@ def seed_test_input(dataset, cluster_num, limit):
     :return: a sequence of seed inputs
     """
     # build the clustering model
-    clf = load_cluster(dataset, cluster_num)
+    clf = load_cluster(dataset)
     clusters = [np.where(clf.labels_ == i) for i in range(cluster_num)]  # len(clusters[0][0])==32561
 
     i = 0
