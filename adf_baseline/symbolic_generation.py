@@ -1,7 +1,6 @@
 import sys
 sys.path.append("../")
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from tensorflow.python.platform import flags
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
@@ -12,11 +11,9 @@ import copy
 
 from adf_utils.config import census, credit, bank
 from adf_baseline.lime import lime_tabular
-from adf_model.tutorial_models import dnn
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.utils_tf import model_argmax
 from adf_tutorial.utils import cluster
 
 FLAGS = flags.FLAGS
@@ -47,13 +44,11 @@ def seed_test_input(dataset, cluster_num, limit):
         i += 1
     return np.array(rows)
 
-def getPath(X, sess, x, preds, input, conf):
+def getPath(X, model, input, conf):
     """
     Get the path from Local Interpretable Model-agnostic Explanation Tree
     :param X: the whole inputs
-    :param sess: TF session
-    :param x: input placeholder
-    :param preds: the model's symbolic output
+    :param model: TF model
     :param input: instance to interpret
     :param conf: the configuration of dataset
     :return: the path for the decision of given instance
@@ -64,7 +59,7 @@ def getPath(X, sess, x, preds, input, conf):
                                                   feature_names=conf.feature_name, class_names=conf.class_name, categorical_features=conf.categorical_features,
                                                   discretize_continuous=True)
     g_data = explainer.generate_instance(input, num_samples=5000)
-    g_labels = model_argmax(sess, x, preds, g_data)
+    g_labels = np.argmax(model(g_data), axis=1)
 
     # build the interpretable tree
     tree = DecisionTreeClassifier(random_state=2019) #min_samples_split=0.05, min_samples_leaf =0.01
@@ -88,23 +83,21 @@ def getPath(X, sess, x, preds, input, conf):
                 path.append([f, ">", tree.tree_.threshold[node], right_confidence])
     return path
 
-def check_for_error_condition(conf, sess, x, preds, t, sens):
+def check_for_error_condition(conf, model, t, sens):
     """
     Check whether the test case is an individual discriminatory instance
     :param conf: the configuration of dataset
-    :param sess: TF session
-    :param x: input placeholder
-    :param preds: the model's symbolic output
+    :param model: TF model
     :param t: test case
     :param sens: the index of sensitive feature
-    :return: whether it is an individual discriminatory instance
+    :return: the value of sensitive feature
     """
-    label = model_argmax(sess, x, preds, np.array([t]))
+    label = np.argmax(model.predict(np.array([t]), verbose=0))
     for val in range(conf.input_bounds[sens-1][0], conf.input_bounds[sens-1][1]+1):
         if val != t[sens-1]:
             tnew = copy.deepcopy(t)
             tnew[sens-1] = val
-            label_new = model_argmax(sess, x, preds, np.array([tnew]))
+            label_new = np.argmax(model.predict(np.array([tnew]), verbose=0))
             if label_new != label:
                 return True
     return False
@@ -212,17 +205,9 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     # prepare the testing data and model
     X, Y, input_shape, nb_classes = data[dataset]()
     arguments = gen_arguments(data_config[dataset])
-    model = dnn(input_shape, nb_classes)
-    x = tf.placeholder(tf.float32, shape=input_shape)
-    y = tf.placeholder(tf.float32, shape=(None, nb_classes))
-    preds = model(x)
-    tf.set_random_seed(1234)
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.8
-    sess = tf.Session(config=config)
-    saver = tf.train.Saver()
-    model_path = model_path + dataset + "/test.model"
-    saver.restore(sess, model_path)
+
+    model_path = model_path + dataset + "/test.model.h5"
+    model = load_model(model_path)
 
     # store the result of fairness testing
     global_disc_inputs = set()
@@ -244,8 +229,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
         t = q.get()
         t_rank = t[0]
         t = np.array(t[1])
-        found = check_for_error_condition(data_config[dataset], sess, x, preds, t, sensitive_param)
-        p = getPath(X, sess, x, preds, t, data_config[dataset])
+        found = check_for_error_condition(data_config[dataset], model, t, sensitive_param)
+        p = getPath(X, model, t, data_config[dataset])
         temp = copy.deepcopy(t.tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
 
@@ -330,7 +315,20 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)), g_count)
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)), l_count)
 
+def gpu_initialize():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
+
+def load_model(model_path):
+    return tf.keras.models.load_model(model_path)
+
 def main(argv=None):
+    gpu_initialize()
     symbolic_generation(dataset=FLAGS.dataset,
                         sensitive_param=FLAGS.sens_param,
                         model_path=FLAGS.model_path,
@@ -344,4 +342,4 @@ if __name__ == '__main__':
     flags.DEFINE_integer('sample_limit', 1000, 'number of samples to search')
     flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
 
-    tf.app.run()
+    main()
