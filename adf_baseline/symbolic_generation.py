@@ -8,11 +8,11 @@ from z3 import *
 import os
 import copy
 
-from adf_utils.config import census, credit, bank
 from adf_baseline.lime import lime_tabular
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
+from adf_data.config import census, credit, bank
 from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster
 
 def seed_test_input(dataset, cluster_num, limit):

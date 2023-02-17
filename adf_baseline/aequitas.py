@@ -11,7 +11,7 @@ import copy
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-from adf_utils.config import census, credit, bank
+from adf_data.config import census, credit, bank
 from adf_utils.utils import gpu_initialize, load_model, set_seed
 
 class Local_Perturbation(object):
