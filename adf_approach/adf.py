@@ -177,7 +177,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     model = load_model(model_path)
 
     # build the clustering model
-    clf = load_cluster(dataset, cluster_num)
+    clf = load_cluster(dataset)
     clusters = [np.where(clf.labels_==i) for i in range(cluster_num)]
 
     # store the result of fairness testing
