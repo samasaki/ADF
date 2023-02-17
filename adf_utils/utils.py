@@ -30,30 +30,17 @@ def cluster(dataset, cluster_num=4):
         joblib.dump(clf , '../clusters/' + dataset + '.pkl')
     return clf
 
-def gradients(model, x, y=None):
-    """
-    Calculate gradients of the TF graph
-    :param model: the TF model
-    :param x: inputs
-    :param y: labels
-    :return: the gradients
-    """
-    tf_x = tf.Variable(x)
-    with tf.GradientTape() as g:
-        preds = model(tf_x)
+def gpu_initialize():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
 
-        if y is None:
-            # Using model predictions as ground truth to avoid label leaking
-            preds_max = tf.reduce_max(preds, axis=1)
-            labels = tf.cast(tf.equal(preds, preds_max), dtype=tf.float32)
-        else:
-            labels = tf.constant(y)
-
-        loss = tf.losses.categorical_crossentropy(labels, preds)
-    
-    grads = g.gradient(loss, tf_x).numpy()
-
-    return grads
+def load_model(model_path):
+    return tf.keras.models.load_model(model_path)
 
 def main(argv=None):
     cluster(dataset=FLAGS.dataset,

@@ -11,12 +11,37 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
-from adf_tutorial.utils import cluster, gradients
+from adf_utils.utils import gpu_initialize, load_model, cluster
 
 FLAGS = flags.FLAGS
 
 # step size of perturbation
 perturbation_size = 1
+
+def gradients(model, x, y=None):
+    """
+    Calculate gradients of the TF graph
+    :param model: the TF model
+    :param x: inputs
+    :param y: labels
+    :return: the gradients
+    """
+    tf_x = tf.Variable(x)
+    with tf.GradientTape() as g:
+        preds = model(tf_x)
+
+        if y is None:
+            # Using model predictions as ground truth to avoid label leaking
+            preds_max = tf.reduce_max(preds, axis=1)
+            labels = tf.cast(tf.equal(preds, preds_max), dtype=tf.float32)
+        else:
+            labels = tf.constant(y)
+
+        loss = tf.losses.categorical_crossentropy(labels, preds)
+    
+    grads = g.gradient(loss, tf_x).numpy()
+
+    return grads
 
 def check_for_error_condition(conf, model, t, sens):
     """
@@ -283,18 +308,6 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)))
-
-def gpu_initialize():
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        except RuntimeError as e:
-            print(e)
-
-def load_model(model_path):
-    return tf.keras.models.load_model(model_path)
 
 def main(argv=None):
     gpu_initialize()

@@ -13,6 +13,7 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
+from adf_utils.utils import gpu_initialize, load_model
 
 FLAGS = flags.FLAGS
 
@@ -254,18 +255,6 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     print("Total Inputs are " + str(len(tot_inputs)))
     print("Total discriminatory inputs of global search- " + str(len(global_disc_inputs)))
     print("Total discriminatory inputs of local search- " + str(len(local_disc_inputs)))
-
-def gpu_initialize():
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        except RuntimeError as e:
-            print(e)
-
-def load_model(model_path):
-    return tf.keras.models.load_model(model_path)
 
 def main(argv=None):
     gpu_initialize()
