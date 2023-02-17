@@ -7,6 +7,31 @@ import numpy as np
 import tensorflow as tf
 import joblib
 
+def gradients(model, x, y=None):
+    """
+    Calculate gradients of the TF graph
+    :param model: the TF model
+    :param x: inputs
+    :param y: labels
+    :return: the gradients
+    """
+    tf_x = tf.Variable(x)
+    with tf.GradientTape() as g:
+        preds = model(tf_x)
+
+        if y is None:
+            # Using model predictions as ground truth to avoid label leaking
+            preds_max = tf.reduce_max(preds, axis=1)
+            labels = tf.cast(tf.equal(preds, preds_max), dtype=tf.float32)
+        else:
+            labels = tf.constant(y)
+
+        loss = tf.losses.categorical_crossentropy(labels, preds)
+    
+    grads = g.gradient(loss, tf_x).numpy()
+
+    return grads
+
 def gpu_initialize():
     gpus = tf.config.experimental.list_physical_devices('GPU')
     if gpus:

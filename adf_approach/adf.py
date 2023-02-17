@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 import sys, os
 sys.path.append("../")
 import copy
@@ -11,32 +10,7 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_data.config import census, credit, bank
-from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster
-
-def gradients(model, x, y=None):
-    """
-    Calculate gradients of the TF graph
-    :param model: the TF model
-    :param x: inputs
-    :param y: labels
-    :return: the gradients
-    """
-    tf_x = tf.Variable(x)
-    with tf.GradientTape() as g:
-        preds = model(tf_x)
-
-        if y is None:
-            # Using model predictions as ground truth to avoid label leaking
-            preds_max = tf.reduce_max(preds, axis=1)
-            labels = tf.cast(tf.equal(preds, preds_max), dtype=tf.float32)
-        else:
-            labels = tf.constant(y)
-
-        loss = tf.losses.categorical_crossentropy(labels, preds)
-    
-    grads = g.gradient(loss, tf_x).numpy()
-
-    return grads
+from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster, gradients
 
 def check_for_error_condition(conf, model, t, sens):
     """
