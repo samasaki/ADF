@@ -18,8 +18,8 @@ from .discretize import QuartileDiscretizer
 from .discretize import StatsDiscretizer
 from sklearn.utils import check_random_state
 
-from adf_baseline.lime import lime_base
-from adf_baseline.lime import explanation
+from adf_approach.lime import lime_base
+from adf_approach.lime import explanation
 
 
 class TableDomainMapper(explanation.DomainMapper):

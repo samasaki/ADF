@@ -8,7 +8,8 @@ from z3 import *
 import os
 import copy
 
-from adf_baseline.lime import lime_tabular
+from lime import lime_tabular
+
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
