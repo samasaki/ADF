@@ -1,19 +1,17 @@
 import sys
 sys.path.append("../")
 import random
+import argparse
 
 import numpy as np
 from sklearn.cluster import KMeans
 import joblib
 import os
 import tensorflow as tf
-from tensorflow.python.platform import flags
 
 from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
-
-FLAGS = flags.FLAGS
 
 datasets_dict = {'census':census_data, 'credit':credit_data, 'bank': bank_data}
 
@@ -52,11 +50,12 @@ def load_model(model_path):
     return tf.keras.models.load_model(model_path)
 
 def main(argv=None):
-    cluster(dataset=FLAGS.dataset,
-            cluster_num=FLAGS.clusters)
+    cluster(**argv)
 
 if __name__ == '__main__':
-    flags.DEFINE_string('dataset', 'census', 'name of datasets')
-    flags.DEFINE_integer('clusters', 4, 'number of clusters')
+    parser = argparse.ArgumentParser(usage='execute symbolic generation')
+    parser.add_argument('--dataset', type=str, default='census', help='the name of dataset')
+    parser.add_argument('--cluster_num', type=int, default=4, help='number of clusters')
+    argv = parser.parse_args()
 
-    main()
+    main(vars(argv))

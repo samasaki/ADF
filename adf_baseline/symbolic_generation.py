@@ -1,7 +1,6 @@
 import sys
 sys.path.append("../")
-import tensorflow as tf
-from tensorflow.python.platform import flags
+import argparse
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 from queue import PriorityQueue
@@ -15,8 +14,6 @@ from adf_data.census import census_data
 from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.utils import gpu_initialize, load_model, set_seed, cluster
-
-FLAGS = flags.FLAGS
 
 def seed_test_input(dataset, cluster_num, limit):
     """
@@ -183,7 +180,7 @@ def gen_arguments(conf):
         arguments.append(Int(conf.feature_name[i]))
     return arguments
 
-def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit):
+def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sample_limit):
     """
     The implementation of symbolic generation
     :param dataset: the name of dataset
@@ -217,7 +214,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     tot_inputs = set()
 
     # select the seed input for fairness testing
-    inputs = seed_test_input(dataset, cluster_num, limit)
+    inputs = seed_test_input(dataset, cluster_num, sample_limit)
     q = PriorityQueue() # low push first
     for inp in inputs[::-1]:
         q.put((rank1,X[inp].tolist()))
@@ -225,7 +222,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
     visited_path = []
     l_count = 0
     g_count = 0
-    while len(tot_inputs) < limit and q.qsize() != 0:
+    while len(tot_inputs) < sample_limit and q.qsize() != 0:
         t = q.get()
         t_rank = t[0]
         t = np.array(t[1])
@@ -243,7 +240,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
                 else:
                     local_disc_inputs.add(tuple(temp))
                     local_disc_inputs_list.append(temp)
-                if len(tot_inputs) == limit:
+                if len(tot_inputs) == sample_limit:
                     break
 
             # local search
@@ -318,17 +315,15 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, limit
 def main(argv=None):
     gpu_initialize()
     set_seed()
-    symbolic_generation(dataset=FLAGS.dataset,
-                        sensitive_param=FLAGS.sens_param,
-                        model_path=FLAGS.model_path,
-                        cluster_num=FLAGS.cluster_num,
-                        limit=FLAGS.sample_limit)
+    symbolic_generation(**argv)
 
 if __name__ == '__main__':
-    flags.DEFINE_string('dataset', 'census', 'the name of dataset')
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race.')
-    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('sample_limit', 1000, 'number of samples to search')
-    flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
+    parser = argparse.ArgumentParser(usage='execute symbolic generation')
+    parser.add_argument('--dataset', type=str, default='census', help='the name of dataset')
+    parser.add_argument('--sensitive_param', type=int, default=9, help='sensitive index, index start from 1, 9 for gender, 8 for race.')
+    parser.add_argument('--model_path', type=str, default='../models/', help='the path for testing model')
+    parser.add_argument('--sample_limit', type=int, default=1000, help='number of samples to search')
+    parser.add_argument('--cluster_num', type=int, default=4, help='the number of clusters to form as well as the number of centroids to generate')
+    argv = parser.parse_args()
 
-    main()
+    main(vars(argv))

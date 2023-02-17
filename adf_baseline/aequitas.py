@@ -4,9 +4,8 @@ sys.path.append("../")
 import os
 import numpy as np
 import random
+import argparse
 from scipy.optimize import basinhopping
-import tensorflow as tf
-from tensorflow.python.platform import flags
 import copy
 
 from adf_data.census import census_data
@@ -14,8 +13,6 @@ from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
 from adf_utils.utils import gpu_initialize, load_model, set_seed
-
-FLAGS = flags.FLAGS
 
 class Local_Perturbation(object):
     """
@@ -259,20 +256,16 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
 def main(argv=None):
     gpu_initialize()
     set_seed()
-    aequitas(dataset = FLAGS.dataset,
-             sensitive_param = FLAGS.sens_param,
-             model_path = FLAGS.model_path,
-             max_global = FLAGS.max_global,
-             max_local = FLAGS.max_local,
-             step_size = FLAGS.step_size)
+    aequitas(**argv)
 
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
-    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('max_global', 1000, 'number of maximum samples for global search')
-    flags.DEFINE_integer('max_local', 1000, 'number of maximum samples for local search')
-    flags.DEFINE_float('step_size', 1.0, 'step size for perturbation')
+    parser = argparse.ArgumentParser(usage='execute Aequitas')
+    parser.add_argument('--dataset', type=str, default='census', help='the name of dataset')
+    parser.add_argument('--sensitive_param', type=int, default=9, help='sensitive index, index start from 1, 9 for gender, 8 for race.')
+    parser.add_argument('--model_path', type=str, default='../models/', help='the path for testing model')
+    parser.add_argument('--max_global', type=int, default=1000, help='number of maximum samples for global search')
+    parser.add_argument('--max_local', type=int, default=1000, help='number of maximum samples for local search')
+    parser.add_argument('--step_size', type=float, default=1.0, help='step size for perturbation')
+    argv = parser.parse_args()
 
-    main()
-
+    main(vars(argv))

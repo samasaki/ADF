@@ -1,18 +1,15 @@
 import numpy as np
 import sys
 sys.path.append("../")
+import argparse
 import os
 os.environ['TF_DETERMINISTIC_OPS'] = '1' # need to install tensorflow-determinism
 
-import tensorflow as tf
-from tensorflow.python.platform import flags
 from adf_data.census import census_data
 from adf_data.bank import bank_data
 from adf_data.credit import credit_data
 from adf_model.tutorial_models import dnn
 from adf_utils.utils import gpu_initialize, set_seed
-
-FLAGS = flags.FLAGS
 
 def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
     """
@@ -34,18 +31,16 @@ def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
 def main(argv=None):
     gpu_initialize()
     set_seed()
-    training(dataset = FLAGS.dataset,
-             model_path = FLAGS.model_path,
-             nb_epochs=FLAGS.nb_epochs,
-             batch_size=FLAGS.batch_size,
-             learning_rate=FLAGS.learning_rate)
+    training(**argv)
 
 
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_string("model_path", "../models/", "the name of path for saving model")
-    flags.DEFINE_integer('nb_epochs', 1000, 'Number of epochs to train model')
-    flags.DEFINE_integer('batch_size', 128, 'Size of training batches')
-    flags.DEFINE_float('learning_rate', 0.01, 'Learning rate for training')
+    parser = argparse.ArgumentParser(usage='create a trained testing model')
+    parser.add_argument('--dataset', type=str, default='census', help='the name of dataset')
+    parser.add_argument('--model_path', type=str, default='../models/', help='the path for testing model')
+    parser.add_argument('--nb_epochs', type=int, default=1000, help='Number of epochs to train model')
+    parser.add_argument('--batch_size', type=int, default=128, help='Size of training batches')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate for training')
+    argv = parser.parse_args()
 
-    main()
+    main(vars(argv))

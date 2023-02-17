@@ -3,8 +3,8 @@ import tensorflow as tf
 import sys, os
 sys.path.append("../")
 import copy
+import argparse
 
-from tensorflow.python.platform import flags
 from scipy.optimize import basinhopping
 
 from adf_data.census import census_data
@@ -12,11 +12,6 @@ from adf_data.credit import credit_data
 from adf_data.bank import bank_data
 from adf_utils.config import census, credit, bank
 from adf_utils.utils import gpu_initialize, load_model, set_seed, cluster
-
-FLAGS = flags.FLAGS
-
-# step size of perturbation
-perturbation_size = 1
 
 def gradients(model, x, y=None):
     """
@@ -105,7 +100,7 @@ class Local_Perturbation(object):
     The  implementation of local perturbation
     """
 
-    def __init__(self, model, n_value, sens, input_shape, conf):
+    def __init__(self, model, n_value, sens, input_shape, conf, perturbation_size):
         """
         Initial function of local perturbation
         :param model: TF model
@@ -113,12 +108,15 @@ class Local_Perturbation(object):
         :param sens_param: the index of sensitive feature
         :param input_shape: the shape of dataset
         :param conf: the configuration of dataset
+        :param perturbation_size: the size of perturbation
         """
         self.model = model
         self.n_value = n_value
         self.input_shape = input_shape
         self.sens = sens
         self.conf = conf
+        self.perturbation_size = perturbation_size
+
 
     def __call__(self, x):
         """
@@ -128,7 +126,7 @@ class Local_Perturbation(object):
         """
 
         # perturbation
-        s = np.random.choice([1.0, -1.0]) * perturbation_size
+        s = np.random.choice([1.0, -1.0]) * self.perturbation_size
 
         n_x = x.copy()
         n_x[self.sens - 1] = self.n_value
@@ -157,7 +155,7 @@ class Local_Perturbation(object):
 
         return x
 
-def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_global, max_local, max_iter):
+def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_global, max_local, max_iter, perturbation_size):
     """
     The implementation of ADF
     :param dataset: the name of testing dataset
@@ -254,7 +252,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
                 # start local perturbation
                 minimizer = {"method": "L-BFGS-B"}
                 local_perturbation = Local_Perturbation(model, n_value, sensitive_param, input_shape[0],
-                                                        data_config[dataset])
+                                                        data_config[dataset], perturbation_size)
                 basinhopping(evaluate_local, sample, stepsize=1.0, take_step=local_perturbation,
                              minimizer_kwargs=minimizer,
                              niter=max_local)
@@ -312,21 +310,18 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
 def main(argv=None):
     gpu_initialize()
     set_seed()
-    dnn_fair_testing(dataset = FLAGS.dataset,
-                     sensitive_param = FLAGS.sens_param,
-                     model_path = FLAGS.model_path,
-                     cluster_num=FLAGS.cluster_num,
-                     max_global=FLAGS.max_global,
-                     max_local=FLAGS.max_local,
-                     max_iter = FLAGS.max_iter)
+    dnn_fair_testing(**argv)
 
 if __name__ == '__main__':
-    flags.DEFINE_string("dataset", "census", "the name of dataset")
-    flags.DEFINE_integer('sens_param', 9, 'sensitive index, index start from 1, 9 for gender, 8 for race')
-    flags.DEFINE_string('model_path', '../models/', 'the path for testing model')
-    flags.DEFINE_integer('cluster_num', 4, 'the number of clusters to form as well as the number of centroids to generate')
-    flags.DEFINE_integer('max_global', 1000, 'maximum number of samples for global search')
-    flags.DEFINE_integer('max_local', 1000, 'maximum number of samples for local search')
-    flags.DEFINE_integer('max_iter', 10, 'maximum iteration of global perturbation')
+    parser = argparse.ArgumentParser(usage='execute ADF')
+    parser.add_argument('--dataset', type=str, default='census', help='the name of dataset')
+    parser.add_argument('--sensitive_param', type=int, default=9, help='sensitive index, index start from 1, 9 for gender, 8 for race.')
+    parser.add_argument('--model_path', type=str, default='../models/', help='the path for testing model')
+    parser.add_argument('--cluster_num', type=int, default=4, help='the number of clusters to form as well as the number of centroids to generate')
+    parser.add_argument('--max_global', type=int, default=1000, help='number of maximum samples for global search')
+    parser.add_argument('--max_local', type=int, default=1000, help='number of maximum samples for local search')
+    parser.add_argument('--max_iter', type=int, default=10, help='maximum iteration of global perturbation')
+    parser.add_argument('--perturbation_size', type=float, default=1.0, help='step size for perturbation')
+    argv = parser.parse_args()
 
-    main()
+    main(vars(argv))
