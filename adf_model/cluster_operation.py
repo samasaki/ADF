@@ -5,11 +5,7 @@ import argparse
 from sklearn.cluster import KMeans
 import joblib
 
-from adf_data.census import census_data
-from adf_data.credit import credit_data
-from adf_data.bank import bank_data
-
-datasets_dict = {'census':census_data, 'credit':credit_data, 'bank': bank_data}
+from adf_data.factory import DataFactory
 
 def make_cluster(dataset, cluster_num=4):
     """
@@ -19,7 +15,7 @@ def make_cluster(dataset, cluster_num=4):
             centroids to generate
     :return: the K_means clustering model
     """
-    X, Y, input_shape, nb_classes = datasets_dict[dataset]()
+    X, Y, input_shape, nb_classes, data_config = DataFactory.factory(dataset)
     clf = KMeans(n_clusters=cluster_num, random_state=2019).fit(X)
     joblib.dump(clf , '../clusters/' + dataset + '.pkl')
 

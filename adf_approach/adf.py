@@ -6,10 +6,7 @@ import argparse
 
 from scipy.optimize import basinhopping
 
-from adf_data.census import census_data
-from adf_data.credit import credit_data
-from adf_data.bank import bank_data
-from adf_data.config import census, credit, bank
+from adf_data.factory import DataFactory
 from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster, gradients
 
 def check_for_error_condition(conf, model, t, sens):
@@ -141,11 +138,9 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
     :param max_local: the maximum number of samples for local search
     :param max_iter: the maximum iteration of global perturbation
     """
-    data = {"census":census_data, "credit":credit_data, "bank":bank_data}
-    data_config = {"census":census, "credit":credit, "bank":bank}
 
     # prepare the testing data and model
-    X, Y, input_shape, nb_classes = data[dataset]()
+    X, Y, input_shape, nb_classes, data_config = DataFactory.factory(dataset)
 
     model_path = model_path + dataset + "/test.model.h5"
     model = load_model(model_path)
@@ -169,7 +164,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
         :param inp: test input
         :return: whether it is an individual discriminatory instance
         """
-        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
+        result = check_for_error_condition(data_config, model, inp, sensitive_param)
 
         temp = copy.deepcopy(inp.astype('int').tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
@@ -196,7 +191,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
             n_value = -1
 
             # search the instance with maximum probability difference for global perturbation
-            for i in range(census.input_bounds[sensitive_param-1][0], census.input_bounds[sensitive_param-1][1] + 1):
+            for i in range(data_config.input_bounds[sensitive_param-1][0], data_config.input_bounds[sensitive_param-1][1] + 1):
                 if i != sample[0][sensitive_param-1]:
                     n_sample = sample.copy()
                     n_sample[0][sensitive_param-1] = i
@@ -226,7 +221,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
                 # start local perturbation
                 minimizer = {"method": "L-BFGS-B"}
                 local_perturbation = Local_Perturbation(model, n_value, sensitive_param, input_shape[0],
-                                                        data_config[dataset], perturbation_size)
+                                                        data_config, perturbation_size)
                 basinhopping(evaluate_local, sample, stepsize=1.0, take_step=local_perturbation,
                              minimizer_kwargs=minimizer,
                              niter=max_local)
@@ -246,9 +241,9 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
             s_grad, n_grad = np.sign(grads[:1]), np.sign(grads[1:])
 
             # find the feature with same impact
-            if np.zeros(data_config[dataset].params).tolist() == s_grad[0].tolist():
+            if np.zeros(data_config.params).tolist() == s_grad[0].tolist():
                 g_diff = n_grad[0]
-            elif np.zeros(data_config[dataset].params).tolist() == n_grad[0].tolist():
+            elif np.zeros(data_config.params).tolist() == n_grad[0].tolist():
                 g_diff = s_grad[0]
             else:
                 g_diff = np.array(s_grad[0] == n_grad[0], dtype=float)
@@ -260,7 +255,7 @@ def dnn_fair_testing(dataset, sensitive_param, model_path, cluster_num, max_glob
                 g_diff[index] = 1.0
 
             cal_grad = s_grad * g_diff
-            sample[0] = clip(sample[0] + perturbation_size * cal_grad[0], data_config[dataset]).astype("int")
+            sample[0] = clip(sample[0] + perturbation_size * cal_grad[0], data_config).astype("int")
 
     # create the folder for storing the fairness testing result
     if not os.path.exists('../results/'):

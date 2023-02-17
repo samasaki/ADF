@@ -10,10 +10,7 @@ import copy
 
 from lime import lime_tabular
 
-from adf_data.census import census_data
-from adf_data.credit import credit_data
-from adf_data.bank import bank_data
-from adf_data.config import census, credit, bank
+from adf_data.factory import DataFactory
 from adf_utils.utils import gpu_initialize, load_model, set_seed, load_cluster
 
 def seed_test_input(dataset, cluster_num, limit):
@@ -191,8 +188,6 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sampl
             centroids to generate
     :param limit: the maximum number of test case
     """
-    data = {"census":census_data, "credit":credit_data, "bank":bank_data}
-    data_config = {"census":census, "credit":credit, "bank":bank}
 
     # the rank for priority queue, rank1 is for seed inputs, rank2 for local, rank3 for global
     rank1 = 5
@@ -201,8 +196,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sampl
     T1 = 0.3
 
     # prepare the testing data and model
-    X, Y, input_shape, nb_classes = data[dataset]()
-    arguments = gen_arguments(data_config[dataset])
+    X, Y, input_shape, nb_classes, data_config = DataFactory.factory(dataset)
+    arguments = gen_arguments(data_config)
 
     model_path = model_path + dataset + "/test.model.h5"
     model = load_model(model_path)
@@ -227,8 +222,8 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sampl
         t = q.get()
         t_rank = t[0]
         t = np.array(t[1])
-        found = check_for_error_condition(data_config[dataset], model, t, sensitive_param)
-        p = getPath(X, model, t, data_config[dataset])
+        found = check_for_error_condition(data_config, model, t, sensitive_param)
+        p = getPath(X, model, t, data_config)
         temp = copy.deepcopy(t.tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
 
@@ -260,7 +255,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sampl
 
                 if path_constraint not in visited_path:
                     visited_path.append(path_constraint)
-                    input = local_solve(path_constraint, arguments, t, i, data_config[dataset])
+                    input = local_solve(path_constraint, arguments, t, i, data_config)
                     l_count += 1
                     if input != None:
                         r = average_confidence(path_constraint)
@@ -286,7 +281,7 @@ def symbolic_generation(dataset, sensitive_param, model_path, cluster_num, sampl
             # filter out the path_constraint already solved before
             if path_constraint not in visited_path:
                 visited_path.append(path_constraint)
-                input = global_solve(path_constraint, arguments, t, data_config[dataset])
+                input = global_solve(path_constraint, arguments, t, data_config)
                 g_count += 1
                 if input != None:
                     r = average_confidence(path_constraint)

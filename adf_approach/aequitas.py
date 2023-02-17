@@ -8,10 +8,7 @@ import argparse
 from scipy.optimize import basinhopping
 import copy
 
-from adf_data.census import census_data
-from adf_data.credit import credit_data
-from adf_data.bank import bank_data
-from adf_data.config import census, credit, bank
+from adf_data.factory import DataFactory
 from adf_utils.utils import gpu_initialize, load_model, set_seed
 
 class Local_Perturbation(object):
@@ -154,9 +151,11 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     :param step_size: the step size of perturbation
     :return:
     """
-    data = {"census": census_data, "credit": credit_data, "bank": bank_data}
-    data_config = {"census": census, "credit": credit, "bank": bank}
-    params = data_config[dataset].params
+    # prepare the testing data and model
+    X, Y, input_shape, nb_classes, data_config = DataFactory.factory(dataset)
+    params = data_config.params
+    model_path = model_path + dataset + "/test.model.h5"
+    model = load_model(model_path)
 
     # hyper-parameters for initial probabilities of directions
     init_prob = 0.5
@@ -166,12 +165,6 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
     # hyper-parameters for features
     param_probability = [1.0 / params] * params
     param_probability_change_size = 0.001
-
-    # prepare the testing data and model
-    X, Y, input_shape, nb_classes = data[dataset]()
-
-    model_path = model_path + dataset + "/test.model.h5"
-    model = load_model(model_path)
 
     # store the result of fairness testing
     global_disc_inputs = set()
@@ -195,7 +188,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         :param inp: test input
         :return: whether it is an individual discriminatory instance
         """
-        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
+        result = check_for_error_condition(data_config, model, inp, sensitive_param)
         temp = copy.deepcopy(inp.astype('int').tolist())
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
@@ -205,8 +198,8 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
             local_disc_inputs_list.append(temp)
         return int(result == int(inp[sensitive_param - 1]))
 
-    global_discovery = Global_Discovery(data_config[dataset])
-    local_perturbation = Local_Perturbation(model, data_config[dataset], sensitive_param, param_probability,
+    global_discovery = Global_Discovery(data_config)
+    local_perturbation = Local_Perturbation(model, data_config, sensitive_param, param_probability,
                                             param_probability_change_size, direction_probability,
                                             direction_probability_change_size, step_size)
 
@@ -219,7 +212,7 @@ def aequitas(dataset, sensitive_param, model_path, max_global, max_local, step_s
         temp = temp[:sensitive_param - 1] + temp[sensitive_param:]
         tot_inputs.add(tuple(temp))
 
-        result = check_for_error_condition(data_config[dataset], model, inp, sensitive_param)
+        result = check_for_error_condition(data_config, model, inp, sensitive_param)
 
         # if get an individual discriminatory instance
         if result != inp[sensitive_param - 1] and (tuple(temp) not in global_disc_inputs) and (

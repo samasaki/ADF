@@ -5,9 +5,7 @@ import argparse
 import os
 os.environ['TF_DETERMINISTIC_OPS'] = '1' # need to install tensorflow-determinism
 
-from adf_data.census import census_data
-from adf_data.bank import bank_data
-from adf_data.credit import credit_data
+from adf_data.factory import DataFactory
 from adf_model.tutorial_models import dnn
 from adf_utils.utils import gpu_initialize, set_seed
 
@@ -17,8 +15,8 @@ def training(dataset, model_path, nb_epochs, batch_size,learning_rate):
     :param dataset: the name of testing dataset
     :param model_path: the path to save trained model
     """
-    data = {"census": census_data, "credit": credit_data, "bank": bank_data}
-    X, Y, input_shape, nb_classes = data[dataset]()
+    X, Y, input_shape, nb_classes, data_config = DataFactory.factory(dataset)
+
 
     model = dnn(input_shape, nb_classes, learning_rate)
     history = model.fit(X, Y, batch_size=batch_size, epochs=nb_epochs, shuffle=True)
